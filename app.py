@@ -3,65 +3,41 @@ from TTS.api import TTS
 import torch
 import os
 
-# التحقق من توفر كرت الشاشة لتسريع العملية في الكولاب
-device = "cuda" if torch.cuda.is_available() else "cpu"
-print(f"Using device: {device}")
+# تحميل موديل XTTS-v2 - مفتوح المصدر 100%
+print("⏳ يتم تحميل XTTS-v2 لأول مرة...")
+tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2")
+print("✅ تم التحميل")
 
-# تحميل نموذج استنساخ وتوليد الصوت الاحترافي الثقيل
-print("Loading XTTS-v2 model...")
-tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
-
-def clone_voice(text, audio_file):
+def clone_voice(text, speaker_wav, language):
+    if speaker_wav is None:
+        return None, "❌ ارفع عينة صوت أولاً"
     if not text.strip():
-        return "الرجاء إدخال نص صحيح."
-    if not audio_file:
-        return "الرجاء رفع عينة صوتية للاستنساخ."
+        return None, "❌ اكتب النص"
     
-    output_path = "output_cloned.wav"
-    
-    try:
-        # تنفيذ عملية الاستنساخ والتوليد
-        tts.tts_to_file(
-            text=text,
-            file_path=output_path,
-            speaker_wav=audio_file,
-            language="ar"
-        )
-        return output_path
-    except Exception as e:
-        return f"حدث خطأ: {str(e)}"
+    output = "/tmp/cloned.wav"
+    tts.tts_to_file(
+        text=text,
+        speaker_wav=speaker_wav,
+        language=language,
+        file_path=output
+    )
+    return output, f"✅ تم إنتاج: {text[:30]}..."
 
-# بناء واجهة الموقع الاحترافية باستخدام Gradio
-with gr.Blocks(theme=gr.themes.Soft()) as demo:
-    gr.Markdown("# 🎙️ منصة استنساخ وتوليد الصوت الاحترافية (AI Voice Cloner)")
-    gr.Markdown("قم برفع ملف صوتي لشخصية تريد استنساخ صوته (مدة العينة 5-10 ثواني بصيغة WAV أو MP3)، واكتب النص المراد نطقه.")
+# واجهة Gradio
+with gr.Blocks(title="مصنع الصوت - XTTS-v2") as demo:
+    gr.Markdown("# 🎙️ مصنع الصوت المفتوح المصدر - XTTS-v2\nيعمل على سيرفرك + Colab")
     
     with gr.Row():
         with gr.Column():
-            text_input = gr.Textbox(
-                label="النص المراد توليده بالصوت المستنسخ (باللغة العربية)", 
-                placeholder="اكتب هنا...", 
-                lines=4
-            )
-            audio_input = gr.Audio(
-                label="عينة الصوت المرجعية للاستنساخ (Reference Audio)", 
-                type="filepath"
-            )
-            generate_btn = gr.Button("بدء الاستنساخ والتوليد 🚀", variant="primary")
-
+            speaker = gr.Audio(type="filepath", label="1- عينة صوتك (6 ثواني WAV)")
+            lang = gr.Dropdown(choices=["ar", "en"], value="ar", label="اللغة")
+            text = gr.Textbox(value="السلام عليكم، هذا صوتي من مصنعي المفتوح المصدر", label="2- النص", lines=3)
+            btn = gr.Button("🔊 إنتاج صوت طبيعي قوي", variant="primary")
         
         with gr.Column():
-            audio_output = gr.Audio(
-                label="النتيجة الصوتية النهائية", 
-                type="filepath"
-            )
+            audio_out = gr.Audio(label="النتيجة", type="filepath")
+            status = gr.Textbox(label="الحالة")
+    
+    btn.click(clone_voice, inputs=[text, speaker, lang], outputs=[audio_out, status])
 
-    generate_btn.click(
-        fn=clone_voice, 
-        inputs=[text_input, audio_input], 
-        outputs=audio_output
-    )
-
-if __name__ == "__main__":
-    # تشغيل الواجهة وفتح رابط مباشر
-    demo.launch(share=True, debug=True)
+demo.launch(server_name="0.0.0.0", server_port=7860, share=True)
