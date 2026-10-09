@@ -1,2 +1,5 @@
-gtts
+torch
+torchaudio
+TTS
 gradio
+numpy
